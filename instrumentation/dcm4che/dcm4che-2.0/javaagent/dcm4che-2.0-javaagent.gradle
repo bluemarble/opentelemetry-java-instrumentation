@@ -1,0 +1,13 @@
+apply from: "$rootDir/gradle/instrumentation.gradle"
+
+muzzle {
+  pass {
+    coreJdk = true
+  }
+}
+
+dependencies {
+  // dcm4che 2.x jars are not available as a maven dependency so we compile
+  // against stub classes
+  compileOnly project(':instrumentation:dcm4che:dcm4che-2.0:compile-stub')
+}
