@@ -6,6 +6,8 @@
 package io.opentelemetry.smoketest
 
 import static io.opentelemetry.semconv.resource.attributes.ResourceAttributes.OS_TYPE
+import static io.opentelemetry.semconv.resource.attributes.ResourceAttributes.OsTypeValues.LINUX
+import static io.opentelemetry.semconv.resource.attributes.ResourceAttributes.OsTypeValues.WINDOWS
 import static org.junit.Assume.assumeTrue
 
 import io.opentelemetry.proto.trace.v1.Span
@@ -30,7 +32,8 @@ abstract class AppServerTest extends SmokeTest {
     serverVersion = appServer.version()
     jdk = appServer.jdk()
 
-    isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
+    isWindows = System.getProperty("os.name").toLowerCase().contains("windows") &&
+      "1" != System.getenv("USE_LINUX_CONTAINERS")
     startTarget(jdk, serverVersion, isWindows)
   }
 
@@ -42,7 +45,7 @@ abstract class AppServerTest extends SmokeTest {
   @Override
   protected String getTargetImage(String jdk, String serverVersion, boolean windows) {
     String platformSuffix = windows ? "-windows" : ""
-    String extraTag = "20210316.657616194"
+    String extraTag = "20210428.792292726"
     String fullSuffix = "-${serverVersion}-jdk$jdk$platformSuffix-$extraTag"
     return getTargetImagePrefix() + fullSuffix
   }
@@ -110,7 +113,7 @@ abstract class AppServerTest extends SmokeTest {
     traces.countFilteredResourceAttributes("telemetry.auto.version", currentAgentVersion) == 3
 
     and: "Number of spans tagged with expected OS type"
-    traces.countFilteredResourceAttributes(OS_TYPE.key, isWindows ? "WINDOWS" : "LINUX") == 3
+    traces.countFilteredResourceAttributes(OS_TYPE.key, isWindows ? WINDOWS : LINUX) == 3
 
     cleanup:
     response?.close()
@@ -150,7 +153,7 @@ abstract class AppServerTest extends SmokeTest {
     traces.countFilteredResourceAttributes("telemetry.auto.version", currentAgentVersion) == 1
 
     and: "Number of spans tagged with expected OS type"
-    traces.countFilteredResourceAttributes(OS_TYPE.key, isWindows ? "WINDOWS" : "LINUX") == 1
+    traces.countFilteredResourceAttributes(OS_TYPE.key, isWindows ? WINDOWS : LINUX) == 1
 
     cleanup:
     response?.close()
@@ -189,7 +192,7 @@ abstract class AppServerTest extends SmokeTest {
     traces.countFilteredResourceAttributes("telemetry.auto.version", currentAgentVersion) == traces.countSpans()
 
     and: "Number of spans tagged with expected OS type"
-    traces.countFilteredResourceAttributes(OS_TYPE.key, isWindows ? "WINDOWS" : "LINUX") == traces.countSpans()
+    traces.countFilteredResourceAttributes(OS_TYPE.key, isWindows ? WINDOWS : LINUX) == traces.countSpans()
 
     cleanup:
     response?.close()
@@ -233,7 +236,7 @@ abstract class AppServerTest extends SmokeTest {
     traces.countFilteredResourceAttributes("telemetry.auto.version", currentAgentVersion) == traces.countSpans()
 
     and: "Number of spans tagged with expected OS type"
-    traces.countFilteredResourceAttributes(OS_TYPE.key, isWindows ? "WINDOWS" : "LINUX") == traces.countSpans()
+    traces.countFilteredResourceAttributes(OS_TYPE.key, isWindows ? WINDOWS : LINUX) == traces.countSpans()
 
     cleanup:
     response?.close()
@@ -277,7 +280,7 @@ abstract class AppServerTest extends SmokeTest {
     traces.countFilteredResourceAttributes("telemetry.auto.version", currentAgentVersion) == 1
 
     and: "Number of spans tagged with expected OS type"
-    traces.countFilteredResourceAttributes(OS_TYPE.key, isWindows ? "WINDOWS" : "LINUX") == 1
+    traces.countFilteredResourceAttributes(OS_TYPE.key, isWindows ? WINDOWS : LINUX) == 1
 
     cleanup:
     response?.close()
@@ -319,7 +322,7 @@ abstract class AppServerTest extends SmokeTest {
     traces.countFilteredResourceAttributes("telemetry.auto.version", currentAgentVersion) == traces.countSpans()
 
     and: "Number of spans tagged with expected OS type"
-    traces.countFilteredResourceAttributes(OS_TYPE.key, isWindows ? "WINDOWS" : "LINUX") == traces.countSpans()
+    traces.countFilteredResourceAttributes(OS_TYPE.key, isWindows ? WINDOWS : LINUX) == traces.countSpans()
 
     cleanup:
     response?.close()
@@ -368,7 +371,7 @@ abstract class AppServerTest extends SmokeTest {
     traces.countFilteredResourceAttributes("telemetry.auto.version", currentAgentVersion) == 3
 
     and: "Number of spans tagged with expected OS type"
-    traces.countFilteredResourceAttributes(OS_TYPE.key, isWindows ? "WINDOWS" : "LINUX") == 3
+    traces.countFilteredResourceAttributes(OS_TYPE.key, isWindows ? WINDOWS : LINUX) == 3
 
     cleanup:
     response?.close()

@@ -5,16 +5,12 @@
 
 package io.opentelemetry.javaagent.instrumentation.servlet.javax;
 
-import static java.util.Collections.singletonMap;
-
 import com.google.auto.service.AutoService;
-import io.opentelemetry.javaagent.instrumentation.servlet.common.dispatcher.RequestDispatcherInstrumentation;
+import io.opentelemetry.javaagent.extension.instrumentation.InstrumentationModule;
+import io.opentelemetry.javaagent.extension.instrumentation.TypeInstrumentation;
 import io.opentelemetry.javaagent.instrumentation.servlet.common.response.HttpServletResponseInstrumentation;
-import io.opentelemetry.javaagent.tooling.InstrumentationModule;
-import io.opentelemetry.javaagent.tooling.TypeInstrumentation;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 @AutoService(InstrumentationModule.class)
 public class JavaxServletInstrumentationModule extends InstrumentationModule {
@@ -26,16 +22,9 @@ public class JavaxServletInstrumentationModule extends InstrumentationModule {
 
   @Override
   public List<TypeInstrumentation> typeInstrumentations() {
-    return Arrays.asList(
+    return Collections.singletonList(
         new HttpServletResponseInstrumentation(
-            BASE_PACKAGE, adviceClassName(".response.ResponseSendAdvice")),
-        new RequestDispatcherInstrumentation(
-            BASE_PACKAGE, adviceClassName(".dispatcher.RequestDispatcherAdvice")));
-  }
-
-  @Override
-  protected Map<String, String> contextStore() {
-    return singletonMap(BASE_PACKAGE + ".RequestDispatcher", String.class.getName());
+            BASE_PACKAGE, adviceClassName(".response.ResponseSendAdvice")));
   }
 
   private static String adviceClassName(String suffix) {

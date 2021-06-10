@@ -5,18 +5,15 @@
 
 package io.opentelemetry.javaagent.instrumentation.servlet.v5_0;
 
-import static java.util.Collections.singletonMap;
-
 import com.google.auto.service.AutoService;
+import io.opentelemetry.javaagent.extension.instrumentation.InstrumentationModule;
+import io.opentelemetry.javaagent.extension.instrumentation.TypeInstrumentation;
 import io.opentelemetry.javaagent.instrumentation.servlet.common.async.AsyncContextInstrumentation;
-import io.opentelemetry.javaagent.instrumentation.servlet.common.dispatcher.RequestDispatcherInstrumentation;
+import io.opentelemetry.javaagent.instrumentation.servlet.common.async.AsyncStartInstrumentation;
 import io.opentelemetry.javaagent.instrumentation.servlet.common.response.HttpServletResponseInstrumentation;
 import io.opentelemetry.javaagent.instrumentation.servlet.common.service.ServletAndFilterInstrumentation;
-import io.opentelemetry.javaagent.tooling.InstrumentationModule;
-import io.opentelemetry.javaagent.tooling.TypeInstrumentation;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 
 @AutoService(InstrumentationModule.class)
 public class JakartaServletInstrumentationModule extends InstrumentationModule {
@@ -31,17 +28,14 @@ public class JakartaServletInstrumentationModule extends InstrumentationModule {
     return Arrays.asList(
         new AsyncContextInstrumentation(
             BASE_PACKAGE, adviceClassName(".async.AsyncDispatchAdvice")),
+        new AsyncStartInstrumentation(BASE_PACKAGE, adviceClassName(".async.AsyncStartAdvice")),
         new ServletAndFilterInstrumentation(
-            BASE_PACKAGE, adviceClassName(".service.JakartaServletServiceAdvice")),
+            BASE_PACKAGE,
+            adviceClassName(".service.JakartaServletServiceAdvice"),
+            adviceClassName(".service.JakartaServletInitAdvice"),
+            adviceClassName(".service.JakartaServletFilterInitAdvice")),
         new HttpServletResponseInstrumentation(
-            BASE_PACKAGE, adviceClassName(".response.ResponseSendAdvice")),
-        new RequestDispatcherInstrumentation(
-            BASE_PACKAGE, adviceClassName(".dispatcher.RequestDispatcherAdvice")));
-  }
-
-  @Override
-  public Map<String, String> contextStore() {
-    return singletonMap(BASE_PACKAGE + ".RequestDispatcher", String.class.getName());
+            BASE_PACKAGE, adviceClassName(".response.ResponseSendAdvice")));
   }
 
   private static String adviceClassName(String suffix) {

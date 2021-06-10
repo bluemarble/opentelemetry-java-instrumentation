@@ -7,6 +7,7 @@ package io.opentelemetry.instrumentation.api.caching;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
 import java.util.concurrent.Executor;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** A builder of {@link Cache}. */
 public final class CacheBuilder {
@@ -14,8 +15,9 @@ public final class CacheBuilder {
   private static final long UNSET = -1;
 
   private boolean weakKeys;
+  private boolean weakValues;
   private long maximumSize = UNSET;
-  private Executor executor = null;
+  @Nullable private Executor executor = null;
 
   /** Sets the maximum size of the cache. */
   public CacheBuilder setMaximumSize(long maximumSize) {
@@ -32,6 +34,12 @@ public final class CacheBuilder {
     return this;
   }
 
+  /** Sets that values should be referenced weakly. */
+  public CacheBuilder setWeakValues() {
+    this.weakValues = true;
+    return this;
+  }
+
   // Visible for testing
   CacheBuilder setExecutor(Executor executor) {
     this.executor = executor;
@@ -40,12 +48,15 @@ public final class CacheBuilder {
 
   /** Returns a new {@link Cache} with the settings of this {@link CacheBuilder}. */
   public <K, V> Cache<K, V> build() {
-    if (weakKeys && maximumSize == UNSET) {
+    if (weakKeys && !weakValues && maximumSize == UNSET) {
       return new WeakLockFreeCache<>();
     }
     Caffeine<?, ?> caffeine = Caffeine.newBuilder();
     if (weakKeys) {
       caffeine.weakKeys();
+    }
+    if (weakValues) {
+      caffeine.weakValues();
     }
     if (maximumSize != UNSET) {
       caffeine.maximumSize(maximumSize);

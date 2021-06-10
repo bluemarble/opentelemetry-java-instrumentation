@@ -6,6 +6,7 @@
 package io.opentelemetry.instrumentation.lettuce.v5_1
 
 import static io.opentelemetry.api.trace.SpanKind.CLIENT
+import static io.opentelemetry.semconv.trace.attributes.SemanticAttributes.NetTransportValues.IP_TCP
 
 import io.lettuce.core.ConnectionFuture
 import io.lettuce.core.RedisClient
@@ -24,13 +25,15 @@ import java.util.function.BiConsumer
 import java.util.function.BiFunction
 import java.util.function.Consumer
 import java.util.function.Function
-import redis.embedded.RedisServer
+import org.testcontainers.containers.FixedHostPortGenericContainer
 import spock.lang.Shared
 import spock.util.concurrent.AsyncConditions
 
 abstract class AbstractLettuceAsyncClientTest extends InstrumentationSpecification {
   public static final String HOST = "127.0.0.1"
   public static final int DB_INDEX = 0
+
+  private static FixedHostPortGenericContainer redisServer = new FixedHostPortGenericContainer<>("redis:6.2.3-alpine")
 
   abstract RedisClient createClient(String uri)
 
@@ -46,9 +49,6 @@ abstract class AbstractLettuceAsyncClientTest extends InstrumentationSpecificati
   String dbUriNonExistent
   @Shared
   String embeddedDbUri
-
-  @Shared
-  RedisServer redisServer
 
   @Shared
   Map<String, String> testHashMap = [
@@ -70,18 +70,12 @@ abstract class AbstractLettuceAsyncClientTest extends InstrumentationSpecificati
     dbUriNonExistent = "redis://" + dbAddrNonExistent
     embeddedDbUri = "redis://" + dbAddr
 
-    redisServer = RedisServer.builder()
-    // bind to localhost to avoid firewall popup
-      .setting("bind " + HOST)
-    // set max memory to avoid problems in CI
-      .setting("maxmemory 128M")
-      .port(port).build()
+    redisServer = redisServer.withFixedExposedPort(port, 6379)
   }
 
   def setup() {
     redisClient = createClient(embeddedDbUri)
 
-    println "Using redis: $redisServer.args"
     redisServer.start()
     redisClient.setOptions(LettuceTestUtil.CLIENT_OPTIONS)
 
@@ -148,12 +142,10 @@ abstract class AbstractLettuceAsyncClientTest extends InstrumentationSpecificati
         span(0) {
           name "SET"
           kind CLIENT
-          errored false
           attributes {
-            "${SemanticAttributes.NET_TRANSPORT.key}" "IP.TCP"
+            "${SemanticAttributes.NET_TRANSPORT.key}" IP_TCP
             "${SemanticAttributes.NET_PEER_IP.key}" "127.0.0.1"
             "${SemanticAttributes.NET_PEER_PORT.key}" port
-            "${SemanticAttributes.DB_CONNECTION_STRING.key}" "redis://127.0.0.1:$port"
             "${SemanticAttributes.DB_SYSTEM.key}" "redis"
             "${SemanticAttributes.DB_STATEMENT.key}" "SET TESTSETKEY ?"
           }
@@ -191,12 +183,10 @@ abstract class AbstractLettuceAsyncClientTest extends InstrumentationSpecificati
         span(0) {
           name "GET"
           kind CLIENT
-          errored false
           attributes {
-            "${SemanticAttributes.NET_TRANSPORT.key}" "IP.TCP"
+            "${SemanticAttributes.NET_TRANSPORT.key}" IP_TCP
             "${SemanticAttributes.NET_PEER_IP.key}" "127.0.0.1"
             "${SemanticAttributes.NET_PEER_PORT.key}" port
-            "${SemanticAttributes.DB_CONNECTION_STRING.key}" "redis://127.0.0.1:$port"
             "${SemanticAttributes.DB_SYSTEM.key}" "redis"
             "${SemanticAttributes.DB_STATEMENT.key}" "GET TESTKEY"
           }
@@ -248,12 +238,10 @@ abstract class AbstractLettuceAsyncClientTest extends InstrumentationSpecificati
         span(0) {
           name "GET"
           kind CLIENT
-          errored false
           attributes {
-            "${SemanticAttributes.NET_TRANSPORT.key}" "IP.TCP"
+            "${SemanticAttributes.NET_TRANSPORT.key}" IP_TCP
             "${SemanticAttributes.NET_PEER_IP.key}" "127.0.0.1"
             "${SemanticAttributes.NET_PEER_PORT.key}" port
-            "${SemanticAttributes.DB_CONNECTION_STRING.key}" "redis://127.0.0.1:$port"
             "${SemanticAttributes.DB_SYSTEM.key}" "redis"
             "${SemanticAttributes.DB_STATEMENT.key}" "GET NON_EXISTENT_KEY"
           }
@@ -291,12 +279,10 @@ abstract class AbstractLettuceAsyncClientTest extends InstrumentationSpecificati
         span(0) {
           name "RANDOMKEY"
           kind CLIENT
-          errored false
           attributes {
-            "${SemanticAttributes.NET_TRANSPORT.key}" "IP.TCP"
+            "${SemanticAttributes.NET_TRANSPORT.key}" IP_TCP
             "${SemanticAttributes.NET_PEER_IP.key}" "127.0.0.1"
             "${SemanticAttributes.NET_PEER_PORT.key}" port
-            "${SemanticAttributes.DB_CONNECTION_STRING.key}" "redis://127.0.0.1:$port"
             "${SemanticAttributes.DB_STATEMENT.key}" "RANDOMKEY"
             "${SemanticAttributes.DB_SYSTEM.key}" "redis"
           }
@@ -352,12 +338,10 @@ abstract class AbstractLettuceAsyncClientTest extends InstrumentationSpecificati
         span(0) {
           name "HMSET"
           kind CLIENT
-          errored false
           attributes {
-            "${SemanticAttributes.NET_TRANSPORT.key}" "IP.TCP"
+            "${SemanticAttributes.NET_TRANSPORT.key}" IP_TCP
             "${SemanticAttributes.NET_PEER_IP.key}" "127.0.0.1"
             "${SemanticAttributes.NET_PEER_PORT.key}" port
-            "${SemanticAttributes.DB_CONNECTION_STRING.key}" "redis://127.0.0.1:$port"
             "${SemanticAttributes.DB_SYSTEM.key}" "redis"
             "${SemanticAttributes.DB_STATEMENT.key}" "HMSET TESTHM firstname ? lastname ? age ?"
           }
@@ -373,12 +357,10 @@ abstract class AbstractLettuceAsyncClientTest extends InstrumentationSpecificati
         span(0) {
           name "HGETALL"
           kind CLIENT
-          errored false
           attributes {
-            "${SemanticAttributes.NET_TRANSPORT.key}" "IP.TCP"
+            "${SemanticAttributes.NET_TRANSPORT.key}" IP_TCP
             "${SemanticAttributes.NET_PEER_IP.key}" "127.0.0.1"
             "${SemanticAttributes.NET_PEER_PORT.key}" port
-            "${SemanticAttributes.DB_CONNECTION_STRING.key}" "redis://127.0.0.1:$port"
             "${SemanticAttributes.DB_SYSTEM.key}" "redis"
             "${SemanticAttributes.DB_STATEMENT.key}" "HGETALL TESTHM"
           }

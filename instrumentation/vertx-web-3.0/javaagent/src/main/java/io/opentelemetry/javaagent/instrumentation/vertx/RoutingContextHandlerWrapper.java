@@ -10,6 +10,10 @@ import io.opentelemetry.context.Context;
 import io.opentelemetry.instrumentation.api.tracer.ServerSpan;
 import io.vertx.core.Handler;
 import io.vertx.ext.web.RoutingContext;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.UndeclaredThrowableException;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,16 +30,34 @@ public final class RoutingContextHandlerWrapper implements Handler<RoutingContex
 
   @Override
   public void handle(RoutingContext context) {
+    Span serverSpan = ServerSpan.fromContextOrNull(Context.current());
     try {
-      Span serverSpan = ServerSpan.fromContextOrNull(Context.current());
       if (serverSpan != null) {
         // TODO should update only SERVER span using
         // https://github.com/open-telemetry/opentelemetry-java-instrumentation/issues/465
         serverSpan.updateName(context.currentRoute().getPath());
       }
-    } catch (Exception ex) {
+    } catch (RuntimeException ex) {
       log.error("Failed to update server span name with vert.x route", ex);
     }
-    handler.handle(context);
+    try {
+      handler.handle(context);
+    } catch (Throwable throwable) {
+      if (serverSpan != null) {
+        serverSpan.recordException(unwrapThrowable(throwable));
+      }
+      throw throwable;
+    }
+  }
+
+  private static Throwable unwrapThrowable(Throwable throwable) {
+    if (throwable.getCause() != null
+        && (throwable instanceof ExecutionException
+            || throwable instanceof CompletionException
+            || throwable instanceof InvocationTargetException
+            || throwable instanceof UndeclaredThrowableException)) {
+      return unwrapThrowable(throwable.getCause());
+    }
+    return throwable;
   }
 }

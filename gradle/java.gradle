@@ -3,10 +3,10 @@ import java.time.Duration
 apply plugin: 'java-library'
 apply plugin: 'groovy'
 apply plugin: 'org.gradle.test-retry'
+apply plugin: 'net.ltgt.errorprone'
 
 apply from: "$rootDir/gradle/spotless.gradle"
 apply from: "$rootDir/gradle/codenarc.gradle"
-apply from: "$rootDir/gradle/spotbugs.gradle"
 apply from: "$rootDir/gradle/checkstyle.gradle"
 
 afterEvaluate {
@@ -24,7 +24,6 @@ def applyCodeCoverage = !(
   project.path.startsWith(":smoke-tests") ||
     //TODO why some tests fail on java 11 if jacoco is present?
     project.path == ":javaagent" ||
-    project.path == ":load-generator" ||
     project.path.startsWith(":benchmark") ||
     project.path.startsWith(":instrumentation") ||
     project.path.startsWith(":testing-common"))
@@ -33,8 +32,8 @@ if (applyCodeCoverage) {
   apply from: "$rootDir/gradle/jacoco.gradle"
 }
 
-if (project.hasProperty("minJavaVersionForTests")) {
-  project.ext.release = project.getProperty("minJavaVersionForTests")
+if (project.hasProperty("minJavaVersionSupported")) {
+  project.ext.release = project.getProperty("minJavaVersionSupported")
 } else {
   project.ext.release = JavaVersion.VERSION_1_8
 }
@@ -50,31 +49,75 @@ java {
   withSourcesJar()
 }
 
-tasks.withType(JavaCompile) {
+tasks.withType(JavaCompile).configureEach {
   options.release.set(project.ext.release.majorVersion.toInteger())
+  options.compilerArgs.add("-Werror")
 }
 //Groovy and Scala compilers don't actually understand --release option
-tasks.withType(GroovyCompile) {
+tasks.withType(GroovyCompile).configureEach {
   sourceCompatibility = JavaVersion.toVersion(project.ext.release)
   targetCompatibility = JavaVersion.toVersion(project.ext.release)
 }
-tasks.withType(ScalaCompile) {
+tasks.withType(ScalaCompile).configureEach {
   sourceCompatibility = JavaVersion.toVersion(project.ext.release)
   targetCompatibility = JavaVersion.toVersion(project.ext.release)
 }
 
-apply plugin: "eclipse"
-eclipse {
-  classpath {
-    downloadSources = true
-    downloadJavadoc = true
+evaluationDependsOn(":dependencyManagement")
+configurations {
+  dependencyManagement {
+    canBeConsumed = false
+    canBeResolved = false
+    visible = false
   }
 }
-if (configurations.find { it.name == 'jmh' }) {
-  eclipse.classpath.plusConfigurations += [configurations.jmh]
+afterEvaluate {
+  configurations.configureEach {
+    if (canBeResolved && !canBeConsumed) {
+      extendsFrom(configurations.dependencyManagement)
+    }
+  }
 }
 
-jar {
+// Force 4.0, or 4.1 to the highest version of that branch. Since 4.0 and 4.1 often have
+// compatibility issues we can't just force to the highest version using normal BOM dependencies.
+abstract class NettyAlignmentRule implements ComponentMetadataRule {
+  void execute(ComponentMetadataContext ctx) {
+    ctx.details.with {
+      if (id.group == "io.netty" && id.name != "netty") {
+        if (id.version.startsWith("4.1.")) {
+          belongsTo("io.netty:netty-bom:4.1.65.Final", false)
+        } else if (id.version.startsWith("4.0.")) {
+          belongsTo("io.netty:netty-bom:4.0.56.Final", false)
+        }
+      }
+    }
+  }
+}
+
+dependencies {
+  dependencyManagement platform(project(":dependencyManagement"))
+
+  components.all(NettyAlignmentRule)
+
+  compileOnly "org.checkerframework:checker-qual"
+
+  testImplementation "org.junit.jupiter:junit-jupiter-api"
+  testImplementation "org.junit.jupiter:junit-jupiter-params"
+  testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine"
+  testRuntimeOnly "org.junit.vintage:junit-vintage-engine"
+
+  testImplementation "org.objenesis:objenesis"
+  testImplementation "org.spockframework:spock-core"
+  testImplementation "ch.qos.logback:logback-classic"
+  testImplementation "org.slf4j:log4j-over-slf4j"
+  testImplementation "org.slf4j:jcl-over-slf4j"
+  testImplementation "org.slf4j:jul-to-slf4j"
+  testImplementation "info.solidsoft.spock:spock-global-unroll"
+  testImplementation "com.github.stefanbirkner:system-rules"
+}
+
+tasks.named('jar').configure {
   /*
   Make Jar build fail on duplicate files
 
@@ -89,33 +132,7 @@ jar {
   Instead we should 'fail early' and avoid building such Jars.
   */
   duplicatesStrategy = 'fail'
-}
 
-repositories {
-  mavenCentral()
-  mavenLocal()
-  maven {
-    url "https://repo.typesafe.com/typesafe/releases"
-  }
-}
-
-dependencies {
-  compileOnly group: 'org.checkerframework', name: 'checker-qual', version: versions.checkerFramework
-
-  testImplementation enforcedPlatform(group: 'org.junit', name: 'junit-bom', version: versions.junit5)
-  testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter-api'
-  testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter-params'
-  testRuntimeOnly group: 'org.junit.jupiter', name: 'junit-jupiter-engine'
-  testRuntimeOnly group: 'org.junit.vintage', name: 'junit-vintage-engine'
-
-  testImplementation deps.spock
-  testImplementation deps.groovy
-  testImplementation deps.testLogging
-  testImplementation group: 'info.solidsoft.spock', name: 'spock-global-unroll', version: '0.5.1'
-  testImplementation group: 'com.github.stefanbirkner', name: 'system-rules', version: '1.19.0'
-}
-
-jar {
   manifest {
     attributes(
       "Implementation-Title": project.name,
@@ -134,8 +151,10 @@ normalization {
   }
 }
 
-javadoc {
+tasks.named('javadoc').configure {
   options.addStringOption('Xdoclint:none', '-quiet')
+  // non-standard option to fail on warnings, see https://bugs.openjdk.java.net/browse/JDK-8200363
+  options.addStringOption('Xwerror', '-quiet')
 
   doFirst {
     if (project.ext.has("apiLinks")) {
@@ -171,7 +190,7 @@ project.afterEvaluate {
 }
 
 def isJavaVersionAllowed(JavaVersion version) {
-  if (project.hasProperty('minJavaVersionForTests') && project.getProperty('minJavaVersionForTests').compareTo(version) > 0) {
+  if (project.hasProperty('minJavaVersionSupported') && project.getProperty('minJavaVersionSupported').compareTo(version) > 0) {
     return false
   }
   if (project.hasProperty('maxJavaVersionForTests') && project.getProperty('maxJavaVersionForTests').compareTo(version) < 0) {
@@ -183,7 +202,7 @@ def isJavaVersionAllowed(JavaVersion version) {
 def testJavaVersion = rootProject.findProperty('testJavaVersion')
 if (testJavaVersion != null) {
   def requestedJavaVersion = JavaVersion.toVersion(testJavaVersion)
-  tasks.withType(Test).all {
+  tasks.withType(Test).configureEach {
     javaLauncher = javaToolchains.launcherFor {
       languageVersion = JavaLanguageVersion.of(requestedJavaVersion.majorVersion)
     }
@@ -194,7 +213,7 @@ if (testJavaVersion != null) {
   // the default test task's version so commands like `./gradlew check` can test all projects regardless
   // of Java version.
   if (!isJavaVersionAllowed(JavaVersion.toVersion(DEFAULT_JAVA_VERSION))) {
-    tasks.withType(Test) {
+    tasks.withType(Test).configureEach {
       javaLauncher = javaToolchains.launcherFor {
         languageVersion = JavaLanguageVersion.of(project.getProperty('maxJavaVersionForTests').majorVersion)
       }
@@ -229,27 +248,7 @@ tasks.withType(Test).configureEach {
   jvmArgs "-Dio.opentelemetry.javaagent.shaded.io.opentelemetry.context.enableStrictContext=${rootProject.findProperty('enableStrictContext') ?: false}"
 }
 
-tasks.withType(AbstractArchiveTask) {
+tasks.withType(AbstractArchiveTask).configureEach {
   preserveFileTimestamps = false
   reproducibleFileOrder = true
-}
-
-plugins.withId('net.ltgt.errorprone') {
-  dependencies {
-    annotationProcessor group: "com.uber.nullaway", name: "nullaway", version: versions.nullaway
-    errorprone group: "com.google.errorprone", name: "error_prone_core", version: versions.errorprone
-  }
-
-  tasks.withType(JavaCompile) {
-    if (!name.toLowerCase().contains("test")) {
-      options.errorprone {
-        error("NullAway")
-
-        // Doesn't work well with Java 8
-        disable("FutureReturnValueIgnored")
-
-        option("NullAway:AnnotatedPackages", "io.opentelemetry,com.linecorp.armeria,com.google.common")
-      }
-    }
-  }
 }

@@ -5,26 +5,29 @@ plugins {
 apply from: "$rootDir/gradle/java.gradle"
 
 dependencies {
-  compileOnly(project(':javaagent-spi'))
-  compileOnly(deps.bytebuddy)
-  compileOnly(deps.opentelemetrySdk)
-  compileOnly(deps.opentelemetrySdkAutoconfigure)
-  compileOnly(deps.slf4j)
+  compileOnly("net.bytebuddy:byte-buddy")
+  compileOnly("io.opentelemetry:opentelemetry-sdk")
+  compileOnly("io.opentelemetry:opentelemetry-sdk-extension-autoconfigure")
+  compileOnly("org.slf4j:slf4j-api")
 
-  annotationProcessor deps.autoservice
-  compileOnly deps.autoservice
+  annotationProcessor "com.google.auto.service:auto-service"
+  compileOnly "com.google.auto.service:auto-service"
 
+  implementation project(':javaagent-extension-api')
   implementation project(':javaagent-tooling')
-  implementation deps.opentelemetryProto
-  implementation deps.opentelemetryOtlp
-  implementation deps.opentelemetryOtlpMetrics
-  implementation group: 'io.grpc', name: 'grpc-testing', version: '1.33.1'
+  implementation "io.opentelemetry:opentelemetry-proto"
+  implementation "io.opentelemetry:opentelemetry-exporter-otlp"
+  implementation "io.opentelemetry:opentelemetry-exporter-otlp-metrics"
+  implementation "io.grpc:grpc-testing:1.33.1"
 
   // Include instrumentations instrumenting core JDK classes tp ensure interoperability with other instrumentation
   implementation project(':instrumentation:executors:javaagent')
   // FIXME: we should enable this, but currently this fails tests for google http client
   //testImplementation project(':instrumentation:http-url-connection:javaagent')
-  implementation project(':instrumentation:classloaders:javaagent')
+  implementation project(':instrumentation:internal:internal-class-loader:javaagent')
+  implementation project(':instrumentation:internal:internal-eclipse-osgi-3.6:javaagent')
+  implementation project(':instrumentation:internal:internal-proxy:javaagent')
+  implementation project(':instrumentation:internal:internal-url-class-loader:javaagent')
 
   // Many tests use OpenTelemetry API calls, e.g., via TraceUtils.runUnderTrace
   implementation project(':instrumentation:opentelemetry-annotations-1.0:javaagent')
@@ -52,7 +55,6 @@ shadowJar {
   // relocate OpenTelemetry API usage
   relocate "io.opentelemetry.api", "io.opentelemetry.javaagent.shaded.io.opentelemetry.api"
   relocate "io.opentelemetry.semconv", "io.opentelemetry.javaagent.shaded.io.opentelemetry.semconv"
-  relocate "io.opentelemetry.spi", "io.opentelemetry.javaagent.shaded.io.opentelemetry.spi"
   relocate "io.opentelemetry.context", "io.opentelemetry.javaagent.shaded.io.opentelemetry.context"
 
   // relocate the OpenTelemetry extensions that are used by instrumentation modules

@@ -6,6 +6,8 @@
 package io.opentelemetry.instrumentation.lettuce.v5_1
 
 import static io.opentelemetry.api.trace.SpanKind.CLIENT
+import static io.opentelemetry.api.trace.StatusCode.ERROR
+import static io.opentelemetry.semconv.trace.attributes.SemanticAttributes.NetTransportValues.IP_TCP
 import static java.nio.charset.StandardCharsets.UTF_8
 
 import io.lettuce.core.RedisClient
@@ -17,12 +19,14 @@ import io.lettuce.core.api.sync.RedisCommands
 import io.opentelemetry.instrumentation.test.InstrumentationSpecification
 import io.opentelemetry.instrumentation.test.utils.PortUtils
 import io.opentelemetry.semconv.trace.attributes.SemanticAttributes
-import redis.embedded.RedisServer
+import org.testcontainers.containers.FixedHostPortGenericContainer
 import spock.lang.Shared
 
 abstract class AbstractLettuceSyncClientTest extends InstrumentationSpecification {
   public static final String HOST = "127.0.0.1"
   public static final int DB_INDEX = 0
+
+  private static FixedHostPortGenericContainer redisServer = new FixedHostPortGenericContainer<>("redis:6.2.3-alpine")
 
   abstract RedisClient createClient(String uri)
 
@@ -40,9 +44,6 @@ abstract class AbstractLettuceSyncClientTest extends InstrumentationSpecificatio
   String embeddedDbUri
   @Shared
   String embeddedDbLocalhostUri
-
-  @Shared
-  RedisServer redisServer
 
   @Shared
   Map<String, String> testHashMap = [
@@ -64,12 +65,7 @@ abstract class AbstractLettuceSyncClientTest extends InstrumentationSpecificatio
     embeddedDbUri = "redis://" + dbAddr
     embeddedDbLocalhostUri = "redis://localhost:" + port + "/" + DB_INDEX
 
-    redisServer = RedisServer.builder()
-    // bind to localhost to avoid firewall popup
-      .setting("bind " + HOST)
-    // set max memory to avoid problems in CI
-      .setting("maxmemory 128M")
-      .port(port).build()
+    redisServer = redisServer.withFixedExposedPort(port, 6379)
   }
 
   def setup() {
@@ -133,12 +129,10 @@ abstract class AbstractLettuceSyncClientTest extends InstrumentationSpecificatio
         span(0) {
           name "SET"
           kind CLIENT
-          errored false
           attributes {
-            "${SemanticAttributes.NET_TRANSPORT.key}" "IP.TCP"
+            "${SemanticAttributes.NET_TRANSPORT.key}" IP_TCP
             "${SemanticAttributes.NET_PEER_IP.key}" "127.0.0.1"
             "${SemanticAttributes.NET_PEER_PORT.key}" port
-            "${SemanticAttributes.DB_CONNECTION_STRING.key}" "redis://127.0.0.1:$port"
             "${SemanticAttributes.DB_SYSTEM.key}" "redis"
             "${SemanticAttributes.DB_STATEMENT.key}" "SET TESTSETKEY ?"
           }
@@ -167,13 +161,11 @@ abstract class AbstractLettuceSyncClientTest extends InstrumentationSpecificatio
         span(0) {
           name "SET"
           kind CLIENT
-          errored false
           attributes {
-            "${SemanticAttributes.NET_TRANSPORT.key}" "IP.TCP"
+            "${SemanticAttributes.NET_TRANSPORT.key}" IP_TCP
             "${SemanticAttributes.NET_PEER_IP.key}" "127.0.0.1"
             "${SemanticAttributes.NET_PEER_NAME.key}" "localhost"
             "${SemanticAttributes.NET_PEER_PORT.key}" port
-            "${SemanticAttributes.DB_CONNECTION_STRING.key}" "redis://localhost:$port"
             "${SemanticAttributes.DB_SYSTEM.key}" "redis"
             "${SemanticAttributes.DB_STATEMENT.key}" "SET TESTSETKEY ?"
           }
@@ -199,12 +191,10 @@ abstract class AbstractLettuceSyncClientTest extends InstrumentationSpecificatio
         span(0) {
           name "GET"
           kind CLIENT
-          errored false
           attributes {
-            "${SemanticAttributes.NET_TRANSPORT.key}" "IP.TCP"
+            "${SemanticAttributes.NET_TRANSPORT.key}" IP_TCP
             "${SemanticAttributes.NET_PEER_IP.key}" "127.0.0.1"
             "${SemanticAttributes.NET_PEER_PORT.key}" port
-            "${SemanticAttributes.DB_CONNECTION_STRING.key}" "redis://127.0.0.1:$port"
             "${SemanticAttributes.DB_SYSTEM.key}" "redis"
             "${SemanticAttributes.DB_STATEMENT.key}" "GET TESTKEY"
           }
@@ -230,12 +220,10 @@ abstract class AbstractLettuceSyncClientTest extends InstrumentationSpecificatio
         span(0) {
           name "GET"
           kind CLIENT
-          errored false
           attributes {
-            "${SemanticAttributes.NET_TRANSPORT.key}" "IP.TCP"
+            "${SemanticAttributes.NET_TRANSPORT.key}" IP_TCP
             "${SemanticAttributes.NET_PEER_IP.key}" "127.0.0.1"
             "${SemanticAttributes.NET_PEER_PORT.key}" port
-            "${SemanticAttributes.DB_CONNECTION_STRING.key}" "redis://127.0.0.1:$port"
             "${SemanticAttributes.DB_SYSTEM.key}" "redis"
             "${SemanticAttributes.DB_STATEMENT.key}" "GET NON_EXISTENT_KEY"
           }
@@ -261,12 +249,10 @@ abstract class AbstractLettuceSyncClientTest extends InstrumentationSpecificatio
         span(0) {
           name "RANDOMKEY"
           kind CLIENT
-          errored false
           attributes {
-            "${SemanticAttributes.NET_TRANSPORT.key}" "IP.TCP"
+            "${SemanticAttributes.NET_TRANSPORT.key}" IP_TCP
             "${SemanticAttributes.NET_PEER_IP.key}" "127.0.0.1"
             "${SemanticAttributes.NET_PEER_PORT.key}" port
-            "${SemanticAttributes.DB_CONNECTION_STRING.key}" "redis://127.0.0.1:$port"
             "${SemanticAttributes.DB_STATEMENT.key}" "RANDOMKEY"
             "${SemanticAttributes.DB_SYSTEM.key}" "redis"
           }
@@ -292,12 +278,10 @@ abstract class AbstractLettuceSyncClientTest extends InstrumentationSpecificatio
         span(0) {
           name "LPUSH"
           kind CLIENT
-          errored false
           attributes {
-            "${SemanticAttributes.NET_TRANSPORT.key}" "IP.TCP"
+            "${SemanticAttributes.NET_TRANSPORT.key}" IP_TCP
             "${SemanticAttributes.NET_PEER_IP.key}" "127.0.0.1"
             "${SemanticAttributes.NET_PEER_PORT.key}" port
-            "${SemanticAttributes.DB_CONNECTION_STRING.key}" "redis://127.0.0.1:$port"
             "${SemanticAttributes.DB_SYSTEM.key}" "redis"
             "${SemanticAttributes.DB_STATEMENT.key}" "LPUSH TESTLIST ?"
           }
@@ -323,12 +307,10 @@ abstract class AbstractLettuceSyncClientTest extends InstrumentationSpecificatio
         span(0) {
           name "HMSET"
           kind CLIENT
-          errored false
           attributes {
-            "${SemanticAttributes.NET_TRANSPORT.key}" "IP.TCP"
+            "${SemanticAttributes.NET_TRANSPORT.key}" IP_TCP
             "${SemanticAttributes.NET_PEER_IP.key}" "127.0.0.1"
             "${SemanticAttributes.NET_PEER_PORT.key}" port
-            "${SemanticAttributes.DB_CONNECTION_STRING.key}" "redis://127.0.0.1:$port"
             "${SemanticAttributes.DB_SYSTEM.key}" "redis"
             "${SemanticAttributes.DB_STATEMENT.key}" "HMSET user firstname ? lastname ? age ?"
           }
@@ -354,12 +336,10 @@ abstract class AbstractLettuceSyncClientTest extends InstrumentationSpecificatio
         span(0) {
           name "HGETALL"
           kind CLIENT
-          errored false
           attributes {
-            "${SemanticAttributes.NET_TRANSPORT.key}" "IP.TCP"
+            "${SemanticAttributes.NET_TRANSPORT.key}" IP_TCP
             "${SemanticAttributes.NET_PEER_IP.key}" "127.0.0.1"
             "${SemanticAttributes.NET_PEER_PORT.key}" port
-            "${SemanticAttributes.DB_CONNECTION_STRING.key}" "redis://127.0.0.1:$port"
             "${SemanticAttributes.DB_SYSTEM.key}" "redis"
             "${SemanticAttributes.DB_STATEMENT.key}" "HGETALL TESTHM"
           }
@@ -390,12 +370,10 @@ abstract class AbstractLettuceSyncClientTest extends InstrumentationSpecificatio
         span(0) {
           name "EVAL"
           kind CLIENT
-          errored false
           attributes {
-            "${SemanticAttributes.NET_TRANSPORT.key}" "IP.TCP"
+            "${SemanticAttributes.NET_TRANSPORT.key}" IP_TCP
             "${SemanticAttributes.NET_PEER_IP.key}" "127.0.0.1"
             "${SemanticAttributes.NET_PEER_PORT.key}" port
-            "${SemanticAttributes.DB_CONNECTION_STRING.key}" "redis://127.0.0.1:$port"
             "${SemanticAttributes.DB_SYSTEM.key}" "redis"
             "${SemanticAttributes.DB_STATEMENT.key}" "EVAL $b64Script 1 TESTLIST ? ?"
           }
@@ -425,12 +403,10 @@ abstract class AbstractLettuceSyncClientTest extends InstrumentationSpecificatio
         span(0) {
           name "MSET"
           kind CLIENT
-          errored false
           attributes {
-            "${SemanticAttributes.NET_TRANSPORT.key}" "IP.TCP"
+            "${SemanticAttributes.NET_TRANSPORT.key}" IP_TCP
             "${SemanticAttributes.NET_PEER_IP.key}" "127.0.0.1"
             "${SemanticAttributes.NET_PEER_PORT.key}" port
-            "${SemanticAttributes.DB_CONNECTION_STRING.key}" "redis://127.0.0.1:$port"
             "${SemanticAttributes.DB_SYSTEM.key}" "redis"
             "${SemanticAttributes.DB_STATEMENT.key}" "MSET key1 ? key2 ?"
           }
@@ -454,13 +430,12 @@ abstract class AbstractLettuceSyncClientTest extends InstrumentationSpecificatio
       trace(0, 1) {
         span(0) {
           name "DEBUG"
+          kind CLIENT
           // Disconnect not an actual error even though an exception is recorded.
-          errored false
           attributes {
-            "${SemanticAttributes.NET_TRANSPORT.key}" "IP.TCP"
+            "${SemanticAttributes.NET_TRANSPORT.key}" IP_TCP
             "${SemanticAttributes.NET_PEER_IP.key}" "127.0.0.1"
             "${SemanticAttributes.NET_PEER_PORT.key}" port
-            "${SemanticAttributes.DB_CONNECTION_STRING.key}" "redis://127.0.0.1:$port"
             "${SemanticAttributes.DB_SYSTEM.key}" "redis"
             "${SemanticAttributes.DB_STATEMENT.key}" "DEBUG SEGFAULT"
           }
@@ -488,15 +463,15 @@ abstract class AbstractLettuceSyncClientTest extends InstrumentationSpecificatio
       trace(0, 1) {
         span(0) {
           name "SHUTDOWN"
+          kind CLIENT
           if (Boolean.getBoolean("testLatestDeps")) {
             // Seems to only be treated as an error with Lettuce 6+
-            errored true
+            status ERROR
           }
           attributes {
-            "${SemanticAttributes.NET_TRANSPORT.key}" "IP.TCP"
+            "${SemanticAttributes.NET_TRANSPORT.key}" IP_TCP
             "${SemanticAttributes.NET_PEER_IP.key}" "127.0.0.1"
             "${SemanticAttributes.NET_PEER_PORT.key}" port
-            "${SemanticAttributes.DB_CONNECTION_STRING.key}" "redis://127.0.0.1:$port"
             "${SemanticAttributes.DB_SYSTEM.key}" "redis"
             "${SemanticAttributes.DB_STATEMENT.key}" "SHUTDOWN NOSAVE"
             if (!Boolean.getBoolean("testLatestDeps")) {

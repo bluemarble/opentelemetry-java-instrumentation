@@ -41,24 +41,31 @@ afterEvaluate {
     compileOnly project(':javaagent-api')
     compileOnly project(':javaagent-bootstrap')
     // Apply common dependencies for instrumentation.
+    compileOnly(project(':javaagent-extension-api')) {
+      // OpenTelemetry SDK is not needed for compilation
+      exclude group: 'io.opentelemetry', module: 'opentelemetry-sdk'
+      exclude group: 'io.opentelemetry', module: 'opentelemetry-sdk-metrics'
+    }
     compileOnly(project(':javaagent-tooling')) {
       // OpenTelemetry SDK is not needed for compilation
       exclude group: 'io.opentelemetry', module: 'opentelemetry-sdk'
+      exclude group: 'io.opentelemetry', module: 'opentelemetry-sdk-metrics'
     }
-    compileOnly deps.bytebuddy
-    annotationProcessor deps.autoservice
-    compileOnly deps.autoservice
-    compileOnly deps.slf4j
+    compileOnly "net.bytebuddy:byte-buddy"
+    annotationProcessor "com.google.auto.service:auto-service"
+    compileOnly "com.google.auto.service:auto-service"
+    compileOnly "org.slf4j:slf4j-api"
 
-    testImplementation deps.opentelemetryApi
+    testImplementation "io.opentelemetry:opentelemetry-api"
 
     testImplementation project(':testing-common')
-    testAnnotationProcessor deps.autoservice
-    testCompileOnly deps.autoservice
+    testAnnotationProcessor "net.bytebuddy:byte-buddy"
+    testCompileOnly "net.bytebuddy:byte-buddy"
 
-    testImplementation deps.testcontainers
+    testImplementation "org.testcontainers:testcontainers"
 
     toolingRuntime(project(path: ":javaagent-tooling", configuration: 'instrumentationMuzzle'))
+    toolingRuntime(project(path: ":javaagent-extension-api", configuration: 'instrumentationMuzzle'))
 
     bootstrapRuntime(project(path: ":javaagent-bootstrap", configuration: 'instrumentationMuzzle'))
   }
@@ -70,10 +77,13 @@ afterEvaluate {
 }
 
 configurations {
-  testInstrumentation
+  testInstrumentation {
+    canBeResolved = true
+    canBeConsumed = false
+  }
 }
 
-shadowJar {
+tasks.named('shadowJar').configure {
   configurations = [project.configurations.runtimeClasspath, project.configurations.testInstrumentation]
   mergeServiceFiles()
 
@@ -93,7 +103,6 @@ shadowJar {
   // relocate OpenTelemetry API usage
   relocate "io.opentelemetry.api", "io.opentelemetry.javaagent.shaded.io.opentelemetry.api"
   relocate "io.opentelemetry.semconv", "io.opentelemetry.javaagent.shaded.io.opentelemetry.semconv"
-  relocate "io.opentelemetry.spi", "io.opentelemetry.javaagent.shaded.io.opentelemetry.spi"
   relocate "io.opentelemetry.context", "io.opentelemetry.javaagent.shaded.io.opentelemetry.context"
 
   // relocate the OpenTelemetry extensions that are used by instrumentation modules

@@ -8,18 +8,19 @@ dependencies {
   testCompileOnly project(':instrumentation-api')
   testCompileOnly project(':javaagent-api')
   testCompileOnly project(':javaagent-tooling')
+  testCompileOnly project(':javaagent-extension-api')
 
-  testImplementation deps.bytebuddy
-  testImplementation deps.bytebuddyagent
+  testImplementation "net.bytebuddy:byte-buddy"
+  testImplementation "net.bytebuddy:byte-buddy-agent"
 
-  testImplementation deps.guava
-  testImplementation deps.opentelemetryExtAnnotations
+  testImplementation "com.google.guava:guava"
+  testImplementation "io.opentelemetry:opentelemetry-extension-annotations"
 
-  testImplementation group: 'cglib', name: 'cglib', version: '3.2.5'
+  testImplementation "cglib:cglib:3.2.5"
 
   // test instrumenting java 1.1 bytecode
   // TODO do we want this?
-  testImplementation group: 'net.sf.jt400', name: 'jt400', version: '6.1'
+  testImplementation "net.sf.jt400:jt400:6.1"
 }
 
 test {

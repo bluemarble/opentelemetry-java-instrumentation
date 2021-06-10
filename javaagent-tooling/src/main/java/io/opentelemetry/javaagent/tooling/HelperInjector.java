@@ -5,7 +5,7 @@
 
 package io.opentelemetry.javaagent.tooling;
 
-import static io.opentelemetry.javaagent.tooling.bytebuddy.matcher.ClassLoaderMatcher.BOOTSTRAP_CLASSLOADER;
+import static io.opentelemetry.javaagent.extension.matcher.ClassLoaderMatcher.BOOTSTRAP_CLASSLOADER;
 
 import io.opentelemetry.instrumentation.api.caching.Cache;
 import io.opentelemetry.javaagent.bootstrap.HelperResources;
@@ -30,6 +30,7 @@ import net.bytebuddy.dynamic.ClassFileLocator;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.dynamic.loading.ClassInjector;
 import net.bytebuddy.utility.JavaModule;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,6 +55,7 @@ public class HelperInjector implements Transformer {
 
   private final Set<String> helperClassNames;
   private final Set<String> helperResourceNames;
+  @Nullable private final ClassLoader helpersSource;
   private final Map<String, byte[]> dynamicTypeMap = new LinkedHashMap<>();
 
   private final Cache<ClassLoader, Boolean> injectedClassLoaders =
@@ -73,20 +75,25 @@ public class HelperInjector implements Transformer {
    *     'io.opentelemetry.javaagent.shaded.instrumentation'
    */
   public HelperInjector(
-      String requestingName, List<String> helperClassNames, List<String> helperResourceNames) {
+      String requestingName,
+      List<String> helperClassNames,
+      List<String> helperResourceNames,
+      ClassLoader helpersSource) {
     this.requestingName = requestingName;
 
     this.helperClassNames = new LinkedHashSet<>(helperClassNames);
     this.helperResourceNames = new LinkedHashSet<>(helperResourceNames);
+    this.helpersSource = helpersSource;
   }
 
   public HelperInjector(String requestingName, Map<String, byte[]> helperMap) {
     this.requestingName = requestingName;
 
-    helperClassNames = helperMap.keySet();
-    dynamicTypeMap.putAll(helperMap);
+    this.helperClassNames = helperMap.keySet();
+    this.dynamicTypeMap.putAll(helperMap);
 
-    helperResourceNames = Collections.emptySet();
+    this.helperResourceNames = Collections.emptySet();
+    this.helpersSource = null;
   }
 
   public static HelperInjector forDynamicTypes(
@@ -102,7 +109,7 @@ public class HelperInjector implements Transformer {
     if (dynamicTypeMap.isEmpty()) {
       Map<String, byte[]> classnameToBytes = new LinkedHashMap<>();
 
-      ClassFileLocator locator = ClassFileLocator.ForClassLoader.of(Utils.getAgentClassLoader());
+      ClassFileLocator locator = ClassFileLocator.ForClassLoader.of(helpersSource);
 
       for (String helperClassName : helperClassNames) {
         byte[] classBytes = locator.locate(helperClassName).resolve();
@@ -158,7 +165,7 @@ public class HelperInjector implements Transformer {
                     cl,
                     e);
               }
-              throw new RuntimeException(e);
+              throw new IllegalStateException(e);
             }
             return true;
           });
@@ -168,7 +175,7 @@ public class HelperInjector implements Transformer {
 
     if (!helperResourceNames.isEmpty()) {
       for (String resourceName : helperResourceNames) {
-        URL resource = Utils.getAgentClassLoader().getResource(resourceName);
+        URL resource = helpersSource.getResource(resourceName);
         if (resource == null) {
           log.debug("Helper resource {} requested but not found.", resourceName);
           continue;
@@ -182,8 +189,8 @@ public class HelperInjector implements Transformer {
     return builder;
   }
 
-  private Map<String, Class<?>> injectBootstrapClassLoader(Map<String, byte[]> classnameToBytes)
-      throws IOException {
+  private static Map<String, Class<?>> injectBootstrapClassLoader(
+      Map<String, byte[]> classnameToBytes) throws IOException {
     // Mar 2020: Since we're proactively cleaning up tempDirs, we cannot share dirs per thread.
     // If this proves expensive, we could do a per-process tempDir with
     // a reference count -- but for now, starting simple.
@@ -202,11 +209,13 @@ public class HelperInjector implements Transformer {
     }
   }
 
-  private Map<String, Class<?>> injectClassLoader(
+  private static Map<String, Class<?>> injectClassLoader(
       ClassLoader classLoader, Map<String, byte[]> classnameToBytes) {
     return new ClassInjector.UsingReflection(classLoader).injectRaw(classnameToBytes);
   }
 
+  // JavaModule.equals doesn't work for some reason
+  @SuppressWarnings("ReferenceEquality")
   private void ensureModuleCanReadHelperModules(JavaModule target) {
     if (JavaModule.isSupported() && target != JavaModule.UNSUPPORTED && target.isNamed()) {
       for (WeakReference<Object> helperModuleReference : helperModules) {
@@ -219,10 +228,10 @@ public class HelperInjector implements Transformer {
             target.modify(
                 AgentInstaller.getInstrumentation(),
                 Collections.singleton(helperModule),
-                Collections.<String, Set<JavaModule>>emptyMap(),
-                Collections.<String, Set<JavaModule>>emptyMap(),
-                Collections.<Class<?>>emptySet(),
-                Collections.<Class<?>, List<Class<?>>>emptyMap());
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptySet(),
+                Collections.emptyMap());
           }
         }
       }

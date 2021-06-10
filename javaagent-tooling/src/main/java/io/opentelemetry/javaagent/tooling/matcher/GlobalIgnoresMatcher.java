@@ -26,18 +26,17 @@ import net.bytebuddy.matcher.ElementMatcher;
  *   number of classes we apply expensive matchers to.
  * </ul>
  */
-public class GlobalIgnoresMatcher<T extends TypeDescription>
-    extends ElementMatcher.Junction.AbstractBase<T> {
+public class GlobalIgnoresMatcher extends ElementMatcher.Junction.AbstractBase<TypeDescription> {
 
   private static final Pattern COM_MCHANGE_PROXY =
       Pattern.compile("com\\.mchange\\.v2\\.c3p0\\..*Proxy");
 
-  public static <T extends TypeDescription> ElementMatcher.Junction<T> globalIgnoresMatcher(
+  public static ElementMatcher.Junction<TypeDescription> globalIgnoresMatcher(
       boolean additionalLibraryMatcher, IgnoreMatcherProvider ignoreMatcherProviders) {
-    return new GlobalIgnoresMatcher<>(additionalLibraryMatcher, ignoreMatcherProviders);
+    return new GlobalIgnoresMatcher(additionalLibraryMatcher, ignoreMatcherProviders);
   }
 
-  private final ElementMatcher<T> additionalLibraryIgnoreMatcher =
+  private final ElementMatcher<TypeDescription> additionalLibraryIgnoreMatcher =
       AdditionalLibraryIgnoresMatcher.additionalLibraryIgnoresMatcher();
   private final boolean additionalLibraryMatcher;
   private final IgnoreMatcherProvider ignoreMatcherProvider;
@@ -54,7 +53,7 @@ public class GlobalIgnoresMatcher<T extends TypeDescription>
    * don't have to load additional info.
    */
   @Override
-  public boolean matches(T target) {
+  public boolean matches(TypeDescription target) {
     IgnoreMatcherProvider.Result ignoreResult = ignoreMatcherProvider.type(target);
     switch (ignoreResult) {
       case IGNORE:
@@ -62,7 +61,6 @@ public class GlobalIgnoresMatcher<T extends TypeDescription>
       case ALLOW:
         return false;
       case DEFAULT:
-      default:
     }
 
     String name = target.getActualName();
@@ -118,10 +116,15 @@ public class GlobalIgnoresMatcher<T extends TypeDescription>
     }
 
     if (name.startsWith("java.")) {
-      if (name.equals("java.net.URL") || name.equals("java.net.HttpURLConnection")) {
+      if (name.equals("java.net.URL")
+          || name.equals("java.net.HttpURLConnection")
+          || name.equals("java.net.URLClassLoader")) {
         return false;
       }
       if (name.startsWith("java.rmi.") || name.startsWith("java.util.concurrent.")) {
+        return false;
+      }
+      if (name.equals("java.lang.reflect.Proxy")) {
         return false;
       }
       if (name.equals("java.lang.ClassLoader")) {
@@ -186,7 +189,17 @@ public class GlobalIgnoresMatcher<T extends TypeDescription>
         || name.contains(".asm.")
         || name.contains("$__sisu")
         || name.contains("$$EnhancerByProxool$$")
-        || name.startsWith("org.springframework.core.$Proxy")) {
+        // glassfish ejb proxy
+        // We skip instrumenting these because some instrumentations e.g. jax-rs instrument methods
+        // that are annotated with @Path in an interface implemented by the class. We don't really
+        // want to instrument these methods in generated classes as this would create spans that
+        // have the generated class name in them instead of the actual class that handles the call.
+        || name.contains("__EJB31_Generated__")
+        || name.startsWith("org.springframework.core.$Proxy")
+        // Tapestry Proxy, check only specific class that we know would be instrumented since there
+        // is no common prefix for its proxies other than "$". ByteBuddy fails to instrument this
+        // proxy, and as there is no reason why it should be instrumented anyway, exclude it.
+        || name.startsWith("$HttpServletRequest_")) {
       return true;
     }
 
@@ -214,7 +227,7 @@ public class GlobalIgnoresMatcher<T extends TypeDescription>
     if (!(obj instanceof GlobalIgnoresMatcher)) {
       return false;
     }
-    GlobalIgnoresMatcher<?> other = (GlobalIgnoresMatcher<?>) obj;
+    GlobalIgnoresMatcher other = (GlobalIgnoresMatcher) obj;
     return additionalLibraryIgnoreMatcher.equals(other.additionalLibraryIgnoreMatcher);
   }
 

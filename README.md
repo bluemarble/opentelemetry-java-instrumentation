@@ -54,6 +54,11 @@ You can also configure the agent and exporter via command line arguments
 or environment variables. The net result is the ability to gather telemetry
 data from a Java application without code changes.
 
+This repository also publishes standalone instrumentation for several libraries (and growing)
+that can be used if you prefer that over using the Java agent.
+Please see [standalone library instrumentation](docs/standalone-library-instrumentation.md)
+if you are looking for documentation on using those.
+
 ## Getting Started
 
 Download the [latest version](https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/latest/download/opentelemetry-javaagent-all.jar).
@@ -143,6 +148,7 @@ Triagers ([@open-telemetry/java-instrumentation-triagers](https://github.com/org
 Approvers ([@open-telemetry/java-instrumentation-approvers](https://github.com/orgs/open-telemetry/teams/java-instrumentation-approvers)):
 
 - [John Watson](https://github.com/jkwatson), Splunk
+- [Lauri Tulmin](https://github.com/laurit), Splunk
 - [Pavol Loffay](https://github.com/pavolloffay), Traceable.ai
 
 Maintainers ([@open-telemetry/java-instrumentation-maintainers](https://github.com/orgs/open-telemetry/teams/java-instrumentation-maintainers)):

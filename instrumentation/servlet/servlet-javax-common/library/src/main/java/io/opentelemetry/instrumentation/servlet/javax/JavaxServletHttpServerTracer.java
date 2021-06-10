@@ -11,12 +11,17 @@ import javax.servlet.http.HttpServletRequest;
 
 public abstract class JavaxServletHttpServerTracer<RESPONSE>
     extends ServletHttpServerTracer<HttpServletRequest, RESPONSE> {
-  public JavaxServletHttpServerTracer(JavaxServletAccessor<RESPONSE> accessor) {
+  protected JavaxServletHttpServerTracer(JavaxServletAccessor<RESPONSE> accessor) {
     super(accessor);
   }
 
   @Override
   protected TextMapGetter<HttpServletRequest> getGetter() {
     return JavaxHttpServletRequestGetter.GETTER;
+  }
+
+  @Override
+  protected String errorExceptionAttributeName() {
+    return "javax.servlet.error.exception";
   }
 }

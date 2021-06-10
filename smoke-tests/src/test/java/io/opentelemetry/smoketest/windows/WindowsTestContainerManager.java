@@ -41,6 +41,7 @@ import okhttp3.Response;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.apache.commons.io.IOUtils;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.rnorth.ducttape.TimeoutException;
 import org.rnorth.ducttape.ratelimits.RateLimiter;
 import org.rnorth.ducttape.ratelimits.RateLimiterBuilder;
@@ -62,10 +63,10 @@ public class WindowsTestContainerManager extends AbstractTestContainerManager {
           new DefaultDockerClientConfig.Builder().withDockerHost(NPIPE_URI).build(),
           new ApacheDockerHttpClient.Builder().dockerHost(URI.create(NPIPE_URI)).build());
 
-  private String natNetworkId = null;
-  private Container backend;
-  private Container collector;
-  private Container target;
+  @Nullable private String natNetworkId = null;
+  @Nullable private Container backend;
+  @Nullable private Container collector;
+  @Nullable private Container target;
 
   @Override
   protected void startEnvironment() {
@@ -77,7 +78,7 @@ public class WindowsTestContainerManager extends AbstractTestContainerManager {
             .exec()
             .getId();
 
-    String backendSuffix = "-windows-20210401.709152102";
+    String backendSuffix = "-windows-20210427.788400024";
 
     String backendImageName =
         "ghcr.io/open-telemetry/java-test-containers:smoke-fake-backend" + backendSuffix;
@@ -101,7 +102,7 @@ public class WindowsTestContainerManager extends AbstractTestContainerManager {
                                     new Ports.Binding(null, null), ExposedPort.tcp(BACKEND_PORT)))),
             containerId -> {},
             new HttpWaiter(BACKEND_PORT, "/health", Duration.ofSeconds(60)),
-            true,
+            /* inspect= */ true,
             backendLogger);
 
     String collectorImageName =
@@ -126,11 +127,11 @@ public class WindowsTestContainerManager extends AbstractTestContainerManager {
                 copyFileToContainer(
                     containerId, IOUtils.toByteArray(configFileStream), COLLECTOR_CONFIG_FILE_PATH);
               } catch (IOException e) {
-                throw new RuntimeException(e);
+                throw new IllegalStateException(e);
               }
             },
             new NoOpWaiter(),
-            false,
+            /* inspect= */ false,
             collectorLogger);
   }
 
@@ -165,6 +166,7 @@ public class WindowsTestContainerManager extends AbstractTestContainerManager {
   public Consumer<OutputFrame> startTarget(
       String targetImageName,
       String agentPath,
+      String jvmArgsEnvVarName,
       Map<String, String> extraEnv,
       Map<String, String> extraResources,
       TargetWaitStrategy waitStrategy) {
@@ -175,7 +177,8 @@ public class WindowsTestContainerManager extends AbstractTestContainerManager {
     }
 
     List<String> environment = new ArrayList<>();
-    getAgentEnvironment().forEach((key, value) -> environment.add(key + "=" + value));
+    getAgentEnvironment(jvmArgsEnvVarName)
+        .forEach((key, value) -> environment.add(key + "=" + value));
     extraEnv.forEach((key, value) -> environment.add(key + "=" + value));
 
     target =
@@ -198,11 +201,11 @@ public class WindowsTestContainerManager extends AbstractTestContainerManager {
                 copyFileToContainer(
                     containerId, IOUtils.toByteArray(agentFileStream), "/" + TARGET_AGENT_FILENAME);
               } catch (Exception e) {
-                throw new RuntimeException(e);
+                throw new IllegalStateException(e);
               }
             },
             createTargetWaiter(waitStrategy),
-            true,
+            /* inspect= */ true,
             logger);
     return null;
   }
@@ -219,7 +222,7 @@ public class WindowsTestContainerManager extends AbstractTestContainerManager {
     try {
       client.pullImageCmd(imageName).exec(new PullImageResultCallback()).awaitCompletion();
     } catch (InterruptedException e) {
-      throw new RuntimeException(e);
+      throw new IllegalStateException(e);
     }
   }
 
@@ -227,7 +230,7 @@ public class WindowsTestContainerManager extends AbstractTestContainerManager {
     try {
       client.inspectImageCmd(imageName).exec();
       return true;
-    } catch (Exception e) {
+    } catch (RuntimeException e) {
       return false;
     }
   }
@@ -282,7 +285,7 @@ public class WindowsTestContainerManager extends AbstractTestContainerManager {
     if (binding != null && binding.length > 0 && binding[0] != null) {
       return Integer.parseInt(binding[0].getHostPortSpec());
     } else {
-      throw new RuntimeException("Port " + internalPort + " not mapped to host.");
+      throw new IllegalStateException("Port " + internalPort + " not mapped to host.");
     }
   }
 
@@ -344,7 +347,7 @@ public class WindowsTestContainerManager extends AbstractTestContainerManager {
     }
   }
 
-  private Waiter createTargetWaiter(TargetWaitStrategy strategy) {
+  private static Waiter createTargetWaiter(TargetWaitStrategy strategy) {
     if (strategy instanceof TargetWaitStrategy.Log) {
       TargetWaitStrategy.Log details = (TargetWaitStrategy.Log) strategy;
       return new LogWaiter(Pattern.compile(details.regex), details.timeout);
@@ -399,7 +402,7 @@ public class WindowsTestContainerManager extends AbstractTestContainerManager {
       try {
         lineHit.await(timeout.toMillis(), TimeUnit.MILLISECONDS);
       } catch (InterruptedException e) {
-        throw new RuntimeException(e);
+        throw new IllegalStateException(e);
       }
 
       logger.info("Done waiting for container {}/{}", container.imageName, container.containerId);
@@ -408,7 +411,7 @@ public class WindowsTestContainerManager extends AbstractTestContainerManager {
 
   private static class HttpWaiter implements Waiter {
     private static final OkHttpClient CLIENT =
-        new OkHttpClient.Builder().callTimeout(1, TimeUnit.SECONDS).build();
+        new OkHttpClient.Builder().callTimeout(Duration.ofSeconds(1)).build();
 
     private final int internalPort;
     private final String path;
@@ -449,18 +452,19 @@ public class WindowsTestContainerManager extends AbstractTestContainerManager {
                       Response response = CLIENT.newCall(request).execute();
 
                       if (response.code() != 200) {
-                        throw new RuntimeException(
+                        throw new IllegalStateException(
                             "Received status code " + response.code() + " from " + request.url());
                       }
                     } catch (IOException e) {
-                      throw new RuntimeException(e);
+                      throw new IllegalStateException(e);
                     }
                   });
 
               return true;
             });
       } catch (TimeoutException e) {
-        throw new RuntimeException("Timed out waiting for container " + container.imageName, e);
+        throw new IllegalStateException(
+            "Timed out waiting for container " + container.imageName, e);
       }
 
       logger.info("Done waiting for container {}/{}", container.imageName, container.containerId);
@@ -499,7 +503,7 @@ public class WindowsTestContainerManager extends AbstractTestContainerManager {
                     int externalPort = extractMappedPort(container, internalPort);
 
                     try {
-                      (new Socket("localhost", externalPort)).close();
+                      new Socket("localhost", externalPort).close();
                     } catch (IOException e) {
                       throw new IllegalStateException(
                           "Socket not listening yet: " + externalPort, e);
@@ -509,7 +513,8 @@ public class WindowsTestContainerManager extends AbstractTestContainerManager {
               return true;
             });
       } catch (TimeoutException e) {
-        throw new RuntimeException("Timed out waiting for container " + container.imageName, e);
+        throw new IllegalStateException(
+            "Timed out waiting for container " + container.imageName, e);
       }
 
       logger.info("Done waiting for container {}/{}", container.imageName, container.containerId);

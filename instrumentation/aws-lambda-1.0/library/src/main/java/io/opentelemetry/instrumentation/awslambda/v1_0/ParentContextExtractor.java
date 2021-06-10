@@ -14,9 +14,10 @@ import io.opentelemetry.context.propagation.TextMapGetter;
 import io.opentelemetry.extension.aws.AwsXrayPropagator;
 import io.opentelemetry.instrumentation.api.tracer.BaseTracer;
 import java.util.Collections;
+import java.util.Locale;
 import java.util.Map;
 
-public class ParentContextExtractor {
+public final class ParentContextExtractor {
 
   private static final String AWS_TRACE_HEADER_ENV_KEY = "_X_AMZN_TRACE_ID";
 
@@ -69,7 +70,9 @@ public class ParentContextExtractor {
 
     @Override
     public String get(Map<String, String> map, String s) {
-      return map.get(s.toLowerCase());
+      return map.get(s.toLowerCase(Locale.ROOT));
     }
   }
+
+  private ParentContextExtractor() {}
 }

@@ -8,9 +8,7 @@ package io.opentelemetry.javaagent
 import jvmbootstraptest.AgentLoadedChecker
 import jvmbootstraptest.MyClassLoaderIsNotBootstrap
 import spock.lang.Specification
-import spock.lang.Timeout
 
-@Timeout(30)
 class AgentLoadedIntoBootstrapTest extends Specification {
 
   def "Agent loads in when separate jvm is launched"() {
@@ -22,8 +20,8 @@ class AgentLoadedIntoBootstrapTest extends Specification {
       , true) == 0
   }
 
-  // this tests the case where someone adds the contents of opentelemetry-auto.jar by mistake to
-  // their application's "uber.jar"
+  // this tests the case where someone adds the contents of opentelemetry-javaagent.jar by mistake
+  // to their application's "uber.jar"
   //
   // the reason this can cause issues is because we locate the agent jar based on the CodeSource of
   // the AgentBootstrap class, and then we add that jar file to the bootstrap class path

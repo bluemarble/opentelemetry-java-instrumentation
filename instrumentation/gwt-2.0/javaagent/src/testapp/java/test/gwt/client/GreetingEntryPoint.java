@@ -13,12 +13,14 @@ import com.google.gwt.user.client.rpc.AsyncCallback;
 import com.google.gwt.user.client.ui.Button;
 import com.google.gwt.user.client.ui.Label;
 import com.google.gwt.user.client.ui.RootPanel;
+import java.io.IOException;
 import test.gwt.shared.MessageService;
 import test.gwt.shared.MessageServiceAsync;
 
 public class GreetingEntryPoint implements EntryPoint {
   private final MessageServiceAsync messageServiceAsync = GWT.create(MessageService.class);
 
+  @Override
   public void onModuleLoad() {
     Button greetingButton = new Button("Greeting");
     greetingButton.addStyleName("greeting.button");
@@ -48,19 +50,25 @@ public class GreetingEntryPoint implements EntryPoint {
         messageLabel.setText("");
         messageLabel.setStyleName("");
 
-        messageServiceAsync.sendMessage(
-            message,
-            new AsyncCallback<String>() {
-              public void onFailure(Throwable caught) {
-                messageLabel.setText("Error");
-                messageLabel.addStyleName("error.received");
-              }
+        try {
+          messageServiceAsync.sendMessage(
+              message,
+              new AsyncCallback<String>() {
+                @Override
+                public void onFailure(Throwable caught) {
+                  messageLabel.setText("Error");
+                  messageLabel.addStyleName("error.received");
+                }
 
-              public void onSuccess(String result) {
-                messageLabel.setText(result);
-                messageLabel.addStyleName("message.received");
-              }
-            });
+                @Override
+                public void onSuccess(String result) {
+                  messageLabel.setText(result);
+                  messageLabel.addStyleName("message.received");
+                }
+              });
+        } catch (IOException e) {
+          throw new IllegalStateException(e);
+        }
       }
     }
 

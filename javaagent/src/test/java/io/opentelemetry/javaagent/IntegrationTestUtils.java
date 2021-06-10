@@ -28,12 +28,16 @@ import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class IntegrationTestUtils {
 
+  private static final Logger logger = LoggerFactory.getLogger(IntegrationTestUtils.class);
+
   /** Returns the classloader the core agent is running on. */
   public static ClassLoader getAgentClassLoader() {
-    return getAgentFieldClassloader("AGENT_CLASSLOADER");
+    return getAgentFieldClassloader("agentClassLoader");
   }
 
   private static ClassLoader getAgentFieldClassloader(String fieldName) {
@@ -129,20 +133,12 @@ public class IntegrationTestUtils {
     return className.replace('.', '/') + ".class";
   }
 
-  public static String[] getBootstrapPackagePrefixes() throws Exception {
+  public static List<String> getBootstrapPackagePrefixes() throws Exception {
     Field f =
         getAgentClassLoader()
             .loadClass("io.opentelemetry.javaagent.tooling.Constants")
             .getField("BOOTSTRAP_PACKAGE_PREFIXES");
-    return (String[]) f.get(null);
-  }
-
-  public static String[] getAgentPackagePrefixes() throws Exception {
-    Field f =
-        getAgentClassLoader()
-            .loadClass("io.opentelemetry.javaagent.tooling.Constants")
-            .getField("AGENT_PACKAGE_PREFIXES");
-    return (String[]) f.get(null);
+    return (List<String>) f.get(null);
   }
 
   private static String getAgentArgument() {
@@ -153,7 +149,7 @@ public class IntegrationTestUtils {
       }
     }
 
-    throw new RuntimeException("Agent jar not found");
+    throw new IllegalStateException("Agent jar not found");
   }
 
   public static int runOnSeparateJvm(
@@ -255,11 +251,11 @@ public class IntegrationTestUtils {
         String line = null;
         while ((line = reader.readLine()) != null) {
           if (print) {
-            System.out.println(type + "> " + line);
+            logger.info("{}> {}", type, line);
           }
         }
       } catch (IOException e) {
-        e.printStackTrace();
+        logger.warn("Error gobbling.", e);
       }
     }
   }

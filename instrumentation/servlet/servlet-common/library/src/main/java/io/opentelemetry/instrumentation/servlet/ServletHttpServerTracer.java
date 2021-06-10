@@ -5,6 +5,10 @@
 
 package io.opentelemetry.instrumentation.servlet;
 
+import static io.opentelemetry.instrumentation.api.servlet.ServerSpanNaming.Source.CONTAINER;
+import static io.opentelemetry.instrumentation.api.servlet.ServerSpanNaming.Source.FILTER;
+import static io.opentelemetry.instrumentation.api.servlet.ServerSpanNaming.Source.SERVLET;
+
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanContext;
 import io.opentelemetry.api.trace.StatusCode;
@@ -12,13 +16,14 @@ import io.opentelemetry.context.Context;
 import io.opentelemetry.context.propagation.TextMapGetter;
 import io.opentelemetry.instrumentation.api.config.Config;
 import io.opentelemetry.instrumentation.api.servlet.AppServerBridge;
+import io.opentelemetry.instrumentation.api.servlet.ServerSpanNaming;
 import io.opentelemetry.instrumentation.api.servlet.ServletContextPath;
-import io.opentelemetry.instrumentation.api.servlet.ServletSpanNaming;
 import io.opentelemetry.instrumentation.api.tracer.HttpServerTracer;
 import io.opentelemetry.semconv.trace.attributes.SemanticAttributes;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.Principal;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,17 +32,22 @@ public abstract class ServletHttpServerTracer<REQUEST, RESPONSE>
 
   private static final Logger log = LoggerFactory.getLogger(ServletHttpServerTracer.class);
 
+  public static final String ASYNC_LISTENER_ATTRIBUTE =
+      ServletHttpServerTracer.class.getName() + ".AsyncListener";
+  public static final String ASYNC_LISTENER_RESPONSE_ATTRIBUTE =
+      ServletHttpServerTracer.class.getName() + ".AsyncListenerResponse";
+
   private static final boolean CAPTURE_EXPERIMENTAL_SPAN_ATTRIBUTES =
       Config.get()
           .getBooleanProperty("otel.instrumentation.servlet.experimental-span-attributes", false);
 
   private final ServletAccessor<REQUEST, RESPONSE> accessor;
 
-  public ServletHttpServerTracer(ServletAccessor<REQUEST, RESPONSE> accessor) {
+  protected ServletHttpServerTracer(ServletAccessor<REQUEST, RESPONSE> accessor) {
     this.accessor = accessor;
   }
 
-  public Context startSpan(REQUEST request, String spanName) {
+  public Context startSpan(REQUEST request, String spanName, boolean servlet) {
     Context context = startSpan(request, request, request, spanName);
 
     SpanContext spanContext = Span.fromContext(context).getSpanContext();
@@ -45,14 +55,17 @@ public abstract class ServletHttpServerTracer<REQUEST, RESPONSE>
     accessor.setRequestAttribute(request, "trace_id", spanContext.getTraceId());
     accessor.setRequestAttribute(request, "span_id", spanContext.getSpanId());
 
+    // server span name shouldn't be updated when server span was created from a call to Servlet
+    // (if created from a call to Filter then name may be updated from updateContext)
+    ServerSpanNaming.updateSource(context, servlet ? SERVLET : FILTER);
+
     return addServletContextPath(context, request);
   }
 
   @Override
   protected Context customizeContext(Context context, REQUEST request) {
-    // add context for tracking whether servlet instrumentation has updated
-    // server span
-    context = ServletSpanNaming.init(context);
+    // add context for tracking whether servlet instrumentation has updated the server span name
+    context = ServerSpanNaming.init(context, CONTAINER);
     // add context for current request's context path
     return addServletContextPath(context, request);
   }
@@ -131,6 +144,31 @@ public abstract class ServletHttpServerTracer<REQUEST, RESPONSE>
   @Override
   protected abstract TextMapGetter<REQUEST> getGetter();
 
+  /**
+   * Response object must be attached to a request prior to {@link #attachAsyncListener(Object)}
+   * being called, as otherwise in some environments it is not possible to access response from
+   * async event in listeners.
+   */
+  public void setAsyncListenerResponse(REQUEST request, RESPONSE response) {
+    accessor.setRequestAttribute(request, ASYNC_LISTENER_RESPONSE_ATTRIBUTE, response);
+  }
+
+  public void attachAsyncListener(REQUEST request) {
+    Context context = getServerContext(request);
+
+    if (context != null) {
+      Object response = accessor.getRequestAttribute(request, ASYNC_LISTENER_RESPONSE_ATTRIBUTE);
+
+      accessor.addRequestAsyncListener(
+          request, new TagSettingAsyncListener<>(this, new AtomicBoolean(), context), response);
+      accessor.setRequestAttribute(request, ASYNC_LISTENER_ATTRIBUTE, true);
+    }
+  }
+
+  public boolean isAsyncListenerAttached(REQUEST request) {
+    return accessor.getRequestAttribute(request, ASYNC_LISTENER_ATTRIBUTE) != null;
+  }
+
   public void addUnwrappedThrowable(Context context, Throwable throwable) {
     if (AppServerBridge.shouldRecordException(context)) {
       onException(context, throwable);
@@ -161,6 +199,18 @@ public abstract class ServletHttpServerTracer<REQUEST, RESPONSE>
   protected String requestHeader(REQUEST httpServletRequest, String name) {
     return accessor.getRequestHeader(httpServletRequest, name);
   }
+
+  public Throwable errorException(REQUEST request) {
+    Object value = accessor.getRequestAttribute(request, errorExceptionAttributeName());
+
+    if (value instanceof Throwable) {
+      return (Throwable) value;
+    } else {
+      return null;
+    }
+  }
+
+  protected abstract String errorExceptionAttributeName();
 
   public String getSpanName(REQUEST request) {
     String servletPath = accessor.getRequestServletPath(request);

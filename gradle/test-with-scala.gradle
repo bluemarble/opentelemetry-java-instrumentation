@@ -3,9 +3,9 @@
 apply plugin: 'scala'
 
 dependencies {
-  testImplementation deps.scala
+  testImplementation "org.scala-lang:scala-library"
 }
 
-compileTestGroovy {
+tasks.named('compileTestGroovy').configure {
   classpath += files(sourceSets.test.scala.classesDirectory)
 }

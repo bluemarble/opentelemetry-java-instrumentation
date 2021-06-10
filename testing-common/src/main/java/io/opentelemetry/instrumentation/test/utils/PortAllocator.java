@@ -45,6 +45,7 @@ class PortAllocator {
                     try {
                       socket.close();
                     } catch (IOException ignored) {
+                      // Ignore
                     }
                   }
                 }));
@@ -106,7 +107,7 @@ class PortAllocator {
   }
 
   static class PortBinder {
-    static PortBinder INSTANCE = new PortBinder();
+    static final PortBinder INSTANCE = new PortBinder();
 
     Closeable bind(int port) {
       try {

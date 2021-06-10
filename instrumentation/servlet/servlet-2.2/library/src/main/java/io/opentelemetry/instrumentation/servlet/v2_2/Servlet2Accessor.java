@@ -5,6 +5,7 @@
 
 package io.opentelemetry.instrumentation.servlet.v2_2;
 
+import io.opentelemetry.instrumentation.servlet.ServletAsyncListener;
 import io.opentelemetry.instrumentation.servlet.javax.JavaxServletAccessor;
 import javax.servlet.http.HttpServletRequest;
 
@@ -16,6 +17,14 @@ public class Servlet2Accessor extends JavaxServletAccessor<ResponseWithStatus> {
   @Override
   public Integer getRequestRemotePort(HttpServletRequest httpServletRequest) {
     return null;
+  }
+
+  @Override
+  public void addRequestAsyncListener(
+      HttpServletRequest request,
+      ServletAsyncListener<ResponseWithStatus> listener,
+      Object response) {
+    throw new UnsupportedOperationException();
   }
 
   @Override

@@ -8,7 +8,7 @@ package io.opentelemetry.javaagent.tooling.matcher;
 import io.opentelemetry.instrumentation.api.caching.Cache;
 import io.opentelemetry.javaagent.bootstrap.PatchLogger;
 import io.opentelemetry.javaagent.spi.IgnoreMatcherProvider;
-import io.opentelemetry.javaagent.tooling.bytebuddy.matcher.ClassLoaderMatcher;
+import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
 import net.bytebuddy.matcher.ElementMatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,10 +45,9 @@ public class GlobalClassloaderIgnoresMatcher
       case ALLOW:
         return false;
       case DEFAULT:
-      default:
     }
 
-    if (cl == ClassLoaderMatcher.BOOTSTRAP_CLASSLOADER) {
+    if (cl == ClassLoadingStrategy.BOOTSTRAP_LOADER) {
       // Don't skip bootstrap loader
       return false;
     }
